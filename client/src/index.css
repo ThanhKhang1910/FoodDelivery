@@ -1,0 +1,167 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Poppins:wght@400;500;600;700;800;900&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Light Mode Colors (Default) */
+    --bg-primary: #ffffff;
+    --bg-secondary: #f9fafb; /* gray-50 */
+    --bg-card: #ffffff;
+    --text-primary: #111827; /* gray-900 */
+    --text-secondary: #4b5563; /* gray-600 */
+    --border-color: #e5e7eb; /* gray-200 */
+    --accent-primary: #ef4444; /* red-500 */
+    --accent-secondary: #3b82f6; /* blue-500 */
+    --card-shadow:
+      0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  }
+
+  .dark {
+    /* Dark Mode Colors */
+    --bg-primary: #111827; /* gray-900 */
+    --bg-secondary: #0f172a; /* slate-900 */
+    --bg-card: #1f2937; /* gray-800 */
+    --text-primary: #f9fafb; /* gray-50 */
+    --text-secondary: #9ca3af; /* gray-400 */
+    --border-color: #374151; /* gray-700 */
+    --accent-primary: #f87171; /* red-400 */
+    --accent-secondary: #60a5fa; /* blue-400 */
+    --card-shadow:
+      0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
+  }
+
+  /* Core Element Reset */
+  * {
+    @apply antialiased;
+  }
+
+  /* Smooth Theme Transition for all elements */
+  *,
+  *::before,
+  *::after {
+    transition-property: background-color, border-color, color, fill, stroke;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 500ms;
+  }
+
+  body {
+    @apply bg-[color:var(--bg-secondary)] text-[color:var(--text-primary)] font-sans;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+@layer components {
+  /* Custom Scrollbar */
+  .custom-scrollbar::-webkit-scrollbar {
+    @apply w-2 h-2;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    @apply bg-gray-100 rounded-full;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    @apply bg-gray-300 rounded-full hover:bg-gray-400 transition-colors;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  /* Glassmorphism */
+  .glass {
+    @apply bg-white/80 backdrop-blur-md border border-white/20;
+  }
+
+  .glass-dark {
+    @apply bg-gray-900/80 backdrop-blur-md border border-gray-800/20;
+  }
+
+  /* Premium Card */
+  .card-premium {
+    @apply bg-white rounded-3xl shadow-soft hover:shadow-medium transition-all duration-300;
+  }
+
+  /* Gradient Text */
+  .text-gradient {
+    @apply bg-gradient-to-r from-primary-500 to-primary-700 bg-clip-text text-transparent;
+  }
+
+  /* Shimmer Effect */
+  .shimmer {
+    background: linear-gradient(90deg, #f0f0f0 0%, #e0e0e0 50%, #f0f0f0 100%);
+    background-size: 200% 100%;
+    animation: shimmer 2s infinite;
+  }
+
+  /* Button Variants */
+  .btn-primary {
+    @apply px-6 py-3 bg-primary-500 text-white rounded-2xl font-bold shadow-lg shadow-primary-100 hover:bg-primary-600 hover:shadow-xl hover:shadow-primary-200 active:scale-95 transition-all duration-200;
+  }
+
+  .btn-secondary {
+    @apply px-6 py-3 bg-gray-100 text-gray-900 rounded-2xl font-bold hover:bg-gray-200 active:scale-95 transition-all duration-200;
+  }
+
+  .btn-outline {
+    @apply px-6 py-3 bg-transparent border-2 border-primary-500 text-primary-500 rounded-2xl font-bold hover:bg-primary-50 active:scale-95 transition-all duration-200;
+  }
+
+  /* Input Styles */
+  .input-primary {
+    @apply w-full px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-2xl outline-none focus:border-primary-500 focus:bg-white transition-all duration-200;
+  }
+
+  /* Floating Label Input */
+  .input-floating-group {
+    @apply relative;
+  }
+
+  .input-floating {
+    @apply w-full px-4 pt-6 pb-2 bg-gray-50 border-2 border-gray-200 rounded-2xl outline-none focus:border-primary-500 focus:bg-white transition-all duration-200;
+  }
+
+  .label-floating {
+    @apply absolute left-4 top-4 text-gray-500 text-sm transition-all duration-200 pointer-events-none peer-focus:top-2 peer-focus:text-xs peer-focus:text-primary-500 peer-[:not(:placeholder-shown)]:top-2 peer-[:not(:placeholder-shown)]:text-xs;
+  }
+}
+
+@layer utilities {
+  /* Animation Delays */
+  .animation-delay-100 {
+    animation-delay: 100ms;
+  }
+
+  .animation-delay-200 {
+    animation-delay: 200ms;
+  }
+
+  .animation-delay-300 {
+    animation-delay: 300ms;
+  }
+
+  .animation-delay-500 {
+    animation-delay: 500ms;
+  }
+
+  /* Perspective */
+  .perspective-1000 {
+    perspective: 1000px;
+  }
+
+  /* Transform Style */
+  .transform-3d {
+    transform-style: preserve-3d;
+  }
+}
