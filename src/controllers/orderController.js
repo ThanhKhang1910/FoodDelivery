@@ -91,6 +91,23 @@ const createOrder = async (req, res) => {
       await updateStatus("DELIVERING", 2000);
       simulateDriver();
       await updateStatus("COMPLETED", 20000); // Arrive after 20s
+
+      // --- SEND EMAIL NOTIFICATION ---
+      try {
+        // Fetch full customer details
+        const { rows } = await require("../config/db").query(
+          "SELECT email, full_name FROM Users WHERE user_id = $1",
+          [customer_id],
+        );
+        if (rows.length > 0) {
+          const { email, full_name } = rows[0];
+          const emailService = require("../services/emailService");
+          await emailService.sendOrderCompletedEmail(email, full_name, orderId);
+        }
+      } catch (emailErr) {
+        console.error("Failed to send completion email:", emailErr);
+      }
+      // -------------------------------
     })();
   } catch (err) {
     console.error(err);

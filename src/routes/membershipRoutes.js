@@ -1,5 +1,6 @@
 const express = require("express");
 const router = express.Router();
+console.log("--- Membership Routes Module Loaded ---");
 const auth = require("../middlewares/auth");
 const {
   createSubscription,
@@ -33,5 +34,16 @@ router.post("/approve/:subscriptionId", auth, approveSubscription);
 // @desc    Cancel active subscription
 // @access  Private
 router.post("/cancel", auth, cancelSubscription);
+
+// DEBUG WILDCARD
+router.all("*", (req, res) => {
+  const fs = require("fs");
+  fs.writeFileSync(
+    "debug_wildcard.txt",
+    `Caught: ${req.method} ${req.originalUrl}\n`,
+  );
+  console.log(`Debug Wildcard: ${req.method} ${req.originalUrl}`);
+  res.status(404).json({ message: "Membership Wildcard Hit" });
+});
 
 module.exports = router;

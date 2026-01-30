@@ -57,7 +57,7 @@ const OrderTracking = () => {
   useEffect(() => {
     const fetchOrder = async () => {
       try {
-        const res = await axiosClient.get(`/customer/orders/${id}`);
+        const res = await axiosClient.get(`/orders/${id}`);
         setOrder(res.data);
         setStatus(res.data.status || "PENDING");
       } catch (e) {
@@ -68,7 +68,7 @@ const OrderTracking = () => {
     fetchOrder();
 
     // Socket Connection
-    const newSocket = io("http://localhost:5000"); // Adjust URL for Prod
+    const newSocket = io("http://localhost:5005"); // Adjust URL for Prod
     setSocket(newSocket);
 
     newSocket.emit("join_order", id);

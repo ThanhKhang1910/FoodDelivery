@@ -59,14 +59,16 @@ const Membership = {
     return rows[0];
   },
 
-  // Check if user has active membership
+  // Check if user has active or pending membership
   async checkActiveMembership(userId) {
     const query = `
       SELECT * FROM membership_subscriptions 
       WHERE user_id = $1 
-        AND status = 'active' 
-        AND expires_at > NOW()
-      ORDER BY expires_at DESC
+        AND status IN ('active', 'pending')
+        AND (expires_at > NOW() OR status = 'pending')
+      ORDER BY 
+        CASE status WHEN 'active' THEN 1 WHEN 'pending' THEN 2 ELSE 3 END,
+        created_at DESC
       LIMIT 1
     `;
 
@@ -112,7 +114,7 @@ const Membership = {
     const query = `
       UPDATE membership_subscriptions
       SET status = 'cancelled'
-      WHERE user_id = $1 AND status = 'active'
+      WHERE user_id = $1 AND status IN ('active', 'pending')
       RETURNING *
     `;
     const { rows } = await pool.query(query, [userId]);

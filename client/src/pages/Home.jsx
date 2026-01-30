@@ -122,7 +122,7 @@ const Home = () => {
       try {
         const [favRes, historyRes] = await Promise.all([
           axiosClient.get("/customer/favorites/ids"),
-          axiosClient.get("/customer/orders/history"),
+          axiosClient.get("/orders/history"),
         ]);
         setFavorites(new Set(favRes.data));
         setRecentOrders(historyRes.data);

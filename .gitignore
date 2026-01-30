@@ -1,2 +1,10 @@
 node_modules
 node_modules
+.env
+# Debug & test files
+debug_*.js
+test_*.js
+tiny_server.js
+routes_dump.txt
+server_startup_proof.txt
+clean_restart_verify.js

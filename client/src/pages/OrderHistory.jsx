@@ -15,7 +15,7 @@ const OrderHistory = () => {
 
   const fetchOrderHistory = async () => {
     try {
-      const res = await axiosClient.get("/customer/orders/history");
+      const res = await axiosClient.get("/orders/history");
       setOrders(res.data);
     } catch (error) {
       console.error("Failed to fetch order history:", error);

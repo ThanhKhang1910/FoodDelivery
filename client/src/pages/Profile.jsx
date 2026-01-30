@@ -13,7 +13,10 @@ const Profile = () => {
     const fetchSubscription = async () => {
       try {
         const response = await axiosClient.get("/membership/active");
-        if (response.data.isPremium) {
+        if (
+          response.data.status === "active" ||
+          response.data.status === "pending"
+        ) {
           setSubscription(response.data);
         }
       } catch (error) {
@@ -149,8 +152,16 @@ const Profile = () => {
                     Bạn đang hưởng trọn quyền lợi cao cấp
                   </p>
                 </div>
-                <div className="px-3 py-1 bg-white/20 rounded-full text-xs font-bold uppercase tracking-wider backdrop-blur-md">
-                  Active
+                <div
+                  className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider backdrop-blur-md ${
+                    subscription.status === "active"
+                      ? "bg-white/20"
+                      : "bg-yellow-400/50 text-yellow-50"
+                  }`}
+                >
+                  {subscription.status === "active"
+                    ? "Active"
+                    : "Pending Verification"}
                 </div>
               </div>
 
@@ -169,9 +180,26 @@ const Profile = () => {
                       Ngày hết hạn
                     </label>
                     <p className="text-xl font-bold">
-                      {new Date(subscription.expiresAt).toLocaleDateString(
-                        "vi-VN",
-                      )}
+                      {(() => {
+                        if (subscription.expiresAt)
+                          return new Date(
+                            subscription.expiresAt,
+                          ).toLocaleDateString("vi-VN");
+                        if (subscription.status === "pending") {
+                          const start = subscription.createdAt
+                            ? new Date(subscription.createdAt)
+                            : new Date();
+                          const months =
+                            subscription.planType === "12_month"
+                              ? 12
+                              : subscription.planType === "6_month"
+                                ? 6
+                                : 1;
+                          start.setMonth(start.getMonth() + months);
+                          return `${start.toLocaleDateString("vi-VN")} (Dự kiến)`;
+                        }
+                        return "---";
+                      })()}
                     </p>
                   </div>
                 </div>

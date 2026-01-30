@@ -73,7 +73,7 @@ const Checkout = () => {
         return;
       }
 
-      const res = await axiosClient.post("/customer/orders", orderData);
+      const res = await axiosClient.post("/orders", orderData);
 
       // Navigate to Tracking Page
       alert(`Đặt hàng thành công! Mã đơn: ${res.data.order_id}`);

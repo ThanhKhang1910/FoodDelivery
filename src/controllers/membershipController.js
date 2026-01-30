@@ -23,6 +23,34 @@ exports.createSubscription = async (req, res) => {
       transaction_info,
     });
 
+    // DEMO MODE: Auto-approve bank payments after 15 seconds
+    if (payment_method === "bank") {
+      setTimeout(async () => {
+        try {
+          // Calculate expiry
+          const now = new Date();
+          let expiresAt;
+          switch (plan_type) {
+            case "1_month":
+              expiresAt = new Date(now.setMonth(now.getMonth() + 1));
+              break;
+            case "6_month":
+              expiresAt = new Date(now.setMonth(now.getMonth() + 6));
+              break;
+            case "12_month":
+              expiresAt = new Date(now.setMonth(now.getMonth() + 12));
+              break;
+            default:
+              expiresAt = new Date(now.setMonth(now.getMonth() + 1));
+          }
+          await Membership.updateStatus(subscriptionId, "active", expiresAt);
+          console.log(`[DEMO] Auto-approved subscription ${subscriptionId}`);
+        } catch (e) {
+          console.error(`[DEMO] Auto-approve failed for ${subscriptionId}`, e);
+        }
+      }, 15000); // 15 seconds delay
+    }
+
     res.status(201).json({
       message:
         "Đơn đăng ký Premium đã được tạo. Đang chờ xác nhận thanh toán...",
@@ -70,9 +98,11 @@ exports.checkActiveMembership = async (req, res) => {
 
     if (membership) {
       res.json({
-        isPremium: true,
+        isPremium: membership.status === "active",
+        status: membership.status, // Return explicit status
         expiresAt: membership.expires_at,
         planType: membership.plan_type,
+        createdAt: membership.created_at,
       });
     } else {
       res.json({

@@ -44,25 +44,32 @@ const MembershipModal = ({ isOpen, onClose }) => {
 
     const plan = plans[selectedPlan];
 
-    // Cash payment - simple success message
-    if (paymentMethod === "cash") {
-      alert(
-        `Đăng ký thành công!\nGói: ${plan.duration}\nGiá: ${plan.price.toLocaleString()}đ\nThanh toán: Tiền mặt khi nhận hàng`,
-      );
-      onClose();
-      return;
-    }
-
-    // Bank payment - create subscription and show QR
     try {
+      // Create subscription for BOTH Cash and Bank
       const response = await axiosClient.post("/membership/subscribe", {
         plan_type: selectedPlan,
         amount: plan.price,
         payment_method: paymentMethod,
-        transaction_info: `Premium ${plan.duration}`,
+        transaction_info:
+          paymentMethod === "bank"
+            ? `Premium ${plan.duration}`
+            : "Cash on Delivery",
       });
 
-      setSubscriptionId(response.data.subscriptionId);
+      const newSubId = response.data.subscriptionId;
+
+      // Cash payment
+      if (paymentMethod === "cash") {
+        alert(
+          `Đăng ký thành công!\nGói: ${plan.duration}\nGiá: ${plan.price.toLocaleString()}đ\nThanh toán: Tiền mặt khi nhận hàng\n\nVui lòng chờ admin xác nhận.`,
+        );
+        onClose();
+        window.location.reload(); // Refresh to show pending sub
+        return;
+      }
+
+      // Bank payment
+      setSubscriptionId(newSubId);
       setShowQR(true);
       setPollingStatus("polling");
     } catch (error) {

@@ -12,6 +12,22 @@ const db = require("./src/config/db");
 
 // App Init
 const app = express();
+const fs = require("fs");
+
+// Startup Proof
+try {
+  fs.writeFileSync(
+    "server_startup_proof.txt",
+    `Started at ${new Date().toISOString()}`,
+  );
+} catch (e) {}
+
+// EXTREME DEBUG ROUTE
+app.get("/EXTREME_DEBUG", (req, res) => {
+  console.log("EXTREME DEBUG HIT");
+  res.send("I AM RUNNING AND UPDATED");
+});
+
 const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
@@ -27,14 +43,6 @@ app.use(cors());
 app.use(express.json());
 app.use(morgan("dev"));
 
-// Debug Logger to File
-app.use((req, res, next) => {
-  const fs = require("fs");
-  const log = `${new Date().toISOString()} ${req.method} ${req.url}\n`;
-  fs.appendFileSync("debug_access.log", log);
-  next();
-});
-
 // Routes
 const authRoutes = require("./src/routes/authRoutes");
 const customerRoutes = require("./src/routes/customerRoutes");
@@ -45,6 +53,7 @@ const rideRoutes = require("./src/routes/rideRoutes");
 const restaurantPortalRoutes = require("./src/routes/restaurantPortalRoutes"); // New variable name for the same file, or a new conceptual route
 const membershipRoutes = require("./src/routes/membershipRoutes");
 
+app.use("/api/v1/membership", membershipRoutes); // MOVED TO TOP PRIORITY
 app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/customer", customerRoutes);
 app.use("/api/v1/orders", orderRoutes); // Changed path
@@ -52,7 +61,6 @@ app.use("/api/v1/customer/rides", rideRoutes); // Kept original ride route
 app.use("/api/v1/driver", driverRoutes);
 app.use("/api/v1/partner", partnerRoutes); // Kept original partner route
 app.use("/api/v1/restaurant-portal", restaurantPortalRoutes); // New restaurant portal route
-app.use("/api/v1/membership", membershipRoutes); // New membership route
 
 app.get("/", (req, res) => {
   res.send("Food Ordering System API is running...");
@@ -81,7 +89,7 @@ io.on("connection", (socket) => {
 });
 
 // Start Server
-const PORT = process.env.PORT || 5000;
+const PORT = 5005; // MOVED TO 5005 TO AVOID ZOMBIE PROCESS
 const Membership = require("./src/models/membershipModel");
 
 server.listen(PORT, async () => {
