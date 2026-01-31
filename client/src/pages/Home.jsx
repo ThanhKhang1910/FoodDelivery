@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import axiosClient from "../api/axiosClient";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import MapComponent from "../components/Map";
 import { useTheme } from "../contexts/ThemeContext";
 import SkeletonCard from "../components/SkeletonCard";
@@ -26,6 +26,7 @@ const formatCurrency = (amount) => {
 
 const Home = () => {
   const { theme, toggleTheme } = useTheme();
+  const navigate = useNavigate();
   const [restaurants, setRestaurants] = useState([]);
   const [martStores, setMartStores] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -564,7 +565,10 @@ const Home = () => {
               ].map((service, index) => (
                 <div
                   key={service.id}
-                  onClick={() => setSelectedService(service.id)}
+                  onClick={() => {
+                    if (service.id === "BIKE") navigate("/bike-booking");
+                    else setSelectedService(service.id);
+                  }}
                   className="flex flex-col items-center gap-3 cursor-pointer group animate-scale-in"
                   style={{ animationDelay: `${index * 100}ms` }}
                 >
@@ -641,9 +645,6 @@ const Home = () => {
                             {order.item_count} món •{" "}
                             {parseFloat(order.total_amount).toLocaleString()}đ
                           </p>
-                          <span className="text-xs font-bold text-primary bg-primary-50 dark:bg-primary-900/30 px-2 py-1 rounded-md">
-                            Đặt lại
-                          </span>
                         </div>
                       </div>
                     ))}

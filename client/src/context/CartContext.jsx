@@ -84,6 +84,12 @@ export const CartProvider = ({ children }) => {
     localStorage.removeItem("cart_restaurant_id");
   };
 
+  const setCart = (newItems, newRestaurantId) => {
+    setCartItems(newItems);
+    setRestaurantId(newRestaurantId);
+    setIsCartOpen(true);
+  };
+
   const totalAmount = cartItems.reduce(
     (total, item) => total + item.price * item.quantity,
     0,
@@ -98,6 +104,7 @@ export const CartProvider = ({ children }) => {
         removeFromCart,
         updateQuantity,
         clearCart,
+        setCart,
         totalAmount,
         isCartOpen,
         toggleCartDrawer,

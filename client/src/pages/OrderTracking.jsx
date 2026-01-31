@@ -1,13 +1,15 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { io } from "socket.io-client";
 import axiosClient from "../api/axiosClient";
+import { fetchRoute } from "../utils/routing";
 import {
   MapContainer,
   TileLayer,
   Marker,
   Popup,
   Polyline,
+  useMap,
 } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
@@ -24,6 +26,19 @@ let DefaultIcon = L.icon({
 });
 
 L.Marker.prototype.options.icon = DefaultIcon;
+
+// Helper component to auto-center map on driver
+const MapAutoCenter = ({ position }) => {
+  const map = useMap();
+  useEffect(() => {
+    if (position) {
+      map.setView([position.lat, position.lng], map.getZoom(), {
+        animate: true,
+      });
+    }
+  }, [position, map]);
+  return null;
+};
 
 const containerStyle = {
   width: "100%",
@@ -52,6 +67,12 @@ const OrderTracking = () => {
   const [driverLocation, setDriverLocation] = useState(null);
   const [driverInfo, setDriverInfo] = useState(null);
   const [socket, setSocket] = useState(null);
+  const [routeData, setRouteData] = useState(null); // {route: [[lat,lng]], distance, duration}
+  const [routeToPickup, setRouteToPickup] = useState(null); // For Bike: Driver -> Pickup
+  const [isSimulating, setIsSimulating] = useState(false);
+  // Rating State
+  const [rating, setRating] = useState(5);
+  const [review, setReview] = useState("");
 
   // Initial Fetch
   useEffect(() => {
@@ -68,7 +89,7 @@ const OrderTracking = () => {
     fetchOrder();
 
     // Socket Connection
-    const newSocket = io("http://localhost:5005"); // Adjust URL for Prod
+    const newSocket = io("http://localhost:5005"); // Fixed: use port 5005
     setSocket(newSocket);
 
     newSocket.emit("join_order", id);
@@ -79,15 +100,161 @@ const OrderTracking = () => {
     });
 
     newSocket.on("driver_location", (data) => {
-      setDriverLocation({ lat: data.lat, lng: data.lng });
+      // setDriverLocation({ lat: data.lat, lng: data.lng }); // Disable backend linear update to use local route animation
     });
 
     newSocket.on("driver_assigned", (data) => {
+      console.log("[OrderTracking] Driver assigned:", data.driver);
       setDriverInfo(data.driver);
     });
 
     return () => newSocket.close();
   }, [id]);
+
+  // Fetch route when order and driver are both ready
+  // Animation Interval Ref
+  const animationIntervalRef = useRef(null);
+
+  // Fetch route when order coordinates are available (Run ONCE when coords exist)
+  useEffect(() => {
+    // If we already have route data, DO NOT fetch again (prevents animation reset)
+    if (routeData) return;
+
+    const fetchRouteData = async () => {
+      // Driver info is optional for route display, but we need coords
+      if (!order || !order.customer_latitude || !order.customer_longitude) {
+        return;
+      }
+
+      // Determine Start Point (Restaurant or Pickup Location)
+      let startPoint = center;
+      if (order.pickup_latitude && order.pickup_longitude) {
+        startPoint = {
+          lat: order.pickup_latitude,
+          lng: order.pickup_longitude,
+        };
+      } else if (order.restaurant_lat && order.restaurant_lng) {
+        startPoint = { lat: order.restaurant_lat, lng: order.restaurant_lng };
+      }
+
+      console.log("[OrderTracking] Fetching route from", startPoint, "to", {
+        lat: order.customer_latitude,
+        lng: order.customer_longitude,
+      });
+
+      const route = await fetchRoute(startPoint, {
+        lat: order.customer_latitude,
+        lng: order.customer_longitude,
+      });
+
+      if (route) {
+        console.log("[OrderTracking] Route fetched successfully!", route);
+        setRouteData(route);
+
+        // --- Leg 0: For Bike, also fetch Driver -> Pickup ---
+        if (order.service_type === "BIKE") {
+          // Generate a random virtual driver location ~1km away
+          const virtualDriver = {
+            lat: startPoint.lat + (Math.random() - 0.5) * 0.02,
+            lng: startPoint.lng + (Math.random() - 0.5) * 0.02,
+          };
+          const toPickup = await fetchRoute(virtualDriver, startPoint);
+          if (toPickup) {
+            setRouteToPickup(toPickup);
+            setDriverLocation(virtualDriver); // Show driver at start
+          }
+        }
+      } else {
+        console.error("[OrderTracking] Failed to fetch route");
+      }
+    };
+
+    fetchRouteData();
+  }, [
+    order?.customer_latitude,
+    order?.customer_longitude,
+    order?.restaurant_lat,
+    order?.pickup_latitude,
+  ]);
+
+  // Demo Simulation for Bike Booking
+  useEffect(() => {
+    if (order && order.service_type === "BIKE" && status === "PENDING") {
+      console.log("Simulating Bike Driver finding...");
+      // 1. Found Driver
+      setTimeout(() => {
+        setStatus("CONFIRMED");
+        setDriverInfo({
+          name: "Nguyễn Văn Bike",
+          rating: 4.9,
+          plate: "59-X1 123.45",
+          phone: "0901234567",
+        });
+        // 2. Start Journey
+        setTimeout(() => {
+          setStatus("DELIVERING");
+        }, 3000);
+      }, 3000);
+    }
+  }, [order, status]);
+
+  // Trigger Animation ONLY when status changes
+  useEffect(() => {
+    if (status === "CONFIRMED" && routeToPickup && !isSimulating) {
+      console.log("Status is CONFIRMED -> Moving to Pickup...");
+      animateDriver(routeToPickup.route, "PICKUP");
+    } else if (status === "DELIVERING" && routeData && routeData.route) {
+      console.log("Status is DELIVERING -> Starting Final Animation 🏎️");
+      animateDriver(routeData.route, "DESTINATION");
+    }
+  }, [status, routeData, routeToPickup]);
+
+  // Animation Logic
+  const animateDriver = (routePoints, stage = "DESTINATION") => {
+    if (!routePoints || routePoints.length < 2) return;
+    setIsSimulating(true);
+
+    // Clear any existing interval
+    if (animationIntervalRef.current)
+      clearInterval(animationIntervalRef.current);
+
+    setDriverLocation({ lat: routePoints[0][0], lng: routePoints[0][1] });
+
+    let index = 1;
+    const totalPoints = routePoints.length;
+    // Leg 1 (to pickup) is faster (10s), Leg 2 (to destination) is 20s
+    const totalTime = stage === "PICKUP" ? 10000 : 20000;
+    const stepTime = totalTime / totalPoints;
+
+    const interval = setInterval(() => {
+      if (index >= totalPoints) {
+        clearInterval(interval);
+        setIsSimulating(false);
+        if (stage === "DESTINATION") {
+          console.log("Trip finished -> Completing Order...");
+          axiosClient
+            .post(`/orders/${id}/complete`)
+            .then((res) => console.log("Order Completed via API", res.data))
+            .catch((err) => console.error("Failed to complete order", err));
+        }
+        return;
+      }
+
+      const point = routePoints[index];
+      setDriverLocation({ lat: point[0], lng: point[1] });
+      index++;
+    }, stepTime);
+
+    animationIntervalRef.current = interval;
+  };
+
+  // Cleanup animation on unmount
+  useEffect(() => {
+    return () => {
+      if (animationIntervalRef.current)
+        clearInterval(animationIntervalRef.current);
+    };
+  }, []);
 
   const currentStepIndex =
     STATUS_STEPS.findIndex((s) => s.status === status) !== -1
@@ -159,109 +326,195 @@ const OrderTracking = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {/* Map Section */}
-          <MapContainer
-            center={[
-              driverLocation?.lat || center.lat,
-              driverLocation?.lng || center.lng,
-            ]}
-            zoom={15}
-            style={{ width: "100%", height: "100%", borderRadius: "1rem" }}
-            scrollWheelZoom={false}
-          >
-            <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            />
+        {/* --- MAIN CONTENT AREA --- */}
+        {status === "COMPLETED" ? (
+          /* COMPLETION & RATING UI */
+          <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-hard p-12 text-center max-w-2xl mx-auto animate-zoom-in">
+            <div className="w-24 h-24 bg-green-100 text-green-500 rounded-full flex items-center justify-center text-5xl mx-auto mb-6">
+              🎉
+            </div>
+            <h2 className="text-3xl font-display font-black text-gray-900 dark:text-white mb-4">
+              Giao hàng thành công!
+            </h2>
+            <p className="text-gray-500 mb-8">
+              Cảm ơn bạn đã sử dụng dịch vụ. Bạn thấy tài xế thế nào?
+            </p>
 
-            {/* Driver Marker */}
-            {driverLocation && (
-              <Marker
-                position={[driverLocation.lat, driverLocation.lng]}
-                icon={L.icon({
-                  iconUrl:
-                    "https://cdn-icons-png.flaticon.com/512/3063/3063823.png",
-                  iconSize: [40, 40],
-                  iconAnchor: [20, 20],
-                })}
-              ></Marker>
-            )}
+            {/* Rating Stars */}
+            <div className="flex justify-center gap-2 mb-6">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <button
+                  key={star}
+                  onClick={() => setRating(star)}
+                  className={`text-4xl transition-transform hover:scale-125 ${rating >= star ? "text-yellow-400" : "text-gray-300"}`}
+                >
+                  ★
+                </button>
+              ))}
+            </div>
 
-            {/* Destination Marker */}
-            <Marker position={[10.776, 106.701]} />
+            {/* Review Textarea */}
+            <textarea
+              className="w-full p-4 border border-gray-200 dark:border-gray-700 rounded-xl mb-6 focus:ring-2 focus:ring-primary outline-none dark:bg-gray-900 dark:text-white"
+              placeholder="Nhập nhận xét của bạn về tài xế..."
+              rows="4"
+              value={review}
+              onChange={(e) => setReview(e.target.value)}
+            ></textarea>
 
-            {/* Simple Connection Line (Mock Routing) */}
-            {driverLocation && (
-              <Polyline
-                positions={[
-                  [driverLocation.lat, driverLocation.lng],
-                  [10.776, 106.701],
+            <button
+              onClick={() => {
+                alert("Cảm ơn đánh giá của bạn!");
+                navigate("/");
+              }}
+              className="px-8 py-3 bg-primary text-white font-bold rounded-xl shadow-lg shadow-primary/30 hover:bg-primary-dark transition-all"
+            >
+              Gửi đánh giá
+            </button>
+          </div>
+        ) : (
+          /* TRACKING MAP UI */
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {/* Map Section */}
+            <div className="md:col-span-2 h-[500px] bg-gray-100 rounded-3xl overflow-hidden shadow-inner relative z-0">
+              <MapContainer
+                center={[
+                  driverLocation?.lat || center.lat,
+                  driverLocation?.lng || center.lng,
                 ]}
-                color="blue"
-                dashArray="10, 10"
-              />
-            )}
-          </MapContainer>
+                zoom={15}
+                style={{ width: "100%", height: "100%" }}
+                scrollWheelZoom={false}
+              >
+                <TileLayer
+                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                />
 
-          {/* Driver Info & Order Details */}
-          <div className="space-y-6">
-            {driverInfo ? (
-              <div className="bg-white dark:bg-gray-800 p-6 rounded-3xl shadow-hard animate-slide-in-right border-l-4 border-primary">
-                <h3 className="font-bold text-gray-500 uppercase text-xs mb-4">
-                  Tài xế của bạn
-                </h3>
-                <div className="flex items-center gap-4 mb-4">
-                  <div className="w-16 h-16 bg-gray-200 rounded-full overflow-hidden">
-                    <img
-                      src="https://i.pravatar.cc/150?img=11"
-                      alt="Driver"
-                      className="w-full h-full object-cover"
+                <MapAutoCenter position={driverLocation} />
+
+                {driverLocation && (
+                  <Marker
+                    position={[driverLocation.lat, driverLocation.lng]}
+                    icon={L.icon({
+                      iconUrl:
+                        order?.service_type === "BIKE"
+                          ? "https://cdn-icons-png.flaticon.com/512/3063/3063822.png" // Bike Icon
+                          : "https://cdn-icons-png.flaticon.com/512/3063/3063823.png", // Car/Truck Icon
+                      iconSize: [40, 40],
+                      iconAnchor: [20, 20],
+                    })}
+                  ></Marker>
+                )}
+
+                {/* Destination Marker */}
+                {order &&
+                  order.customer_latitude &&
+                  order.customer_longitude && (
+                    <Marker
+                      position={[
+                        order.customer_latitude,
+                        order.customer_longitude,
+                      ]}
                     />
-                  </div>
-                  <div>
-                    <h4 className="text-xl font-bold text-gray-900 dark:text-white">
-                      {driverInfo.name}
-                    </h4>
-                    <div className="flex items-center text-amber-500 font-bold text-sm">
-                      ⭐ {driverInfo.rating}
+                  )}
+
+                {/* Real Route from OpenRouteService */}
+                {routeData && routeData.route && (
+                  <Polyline
+                    positions={routeData.route}
+                    color="#3b82f6"
+                    weight={6}
+                    opacity={0.8}
+                  />
+                )}
+              </MapContainer>
+            </div>
+
+            {/* Driver Info & Order Details */}
+            <div className="space-y-6">
+              {driverInfo ? (
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-3xl shadow-hard animate-slide-in-right border-l-4 border-primary">
+                  <h3 className="font-bold text-gray-500 uppercase text-xs mb-4">
+                    Tài xế của bạn
+                  </h3>
+                  <div className="flex items-center gap-4 mb-4">
+                    <div className="w-16 h-16 bg-gray-200 rounded-full overflow-hidden">
+                      <img
+                        src="https://randomuser.me/api/portraits/men/32.jpg"
+                        alt="Driver"
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                    <div>
+                      <p className="font-bold text-lg dark:text-white">
+                        {driverInfo.name}
+                      </p>
+                      <div className="flex items-center text-yellow-500 text-sm">
+                        ⭐ {driverInfo.rating}
+                      </div>
                     </div>
                   </div>
+                  <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-xl flex justify-between items-center">
+                    <div>
+                      <p className="font-mono font-bold text-gray-800 dark:text-white">
+                        {driverInfo.plate}
+                      </p>
+                      <p className="text-xs text-gray-500">Honda Vision</p>
+                    </div>
+                    <div>
+                      <p className="font-mono font-bold text-gray-800 dark:text-white">
+                        {driverInfo.phone}
+                      </p>
+                    </div>
+                  </div>
+
+                  {routeData && (
+                    <div className="mt-4 grid grid-cols-2 gap-2">
+                      <div className="bg-blue-50 dark:bg-blue-900/30 p-3 rounded-xl text-center">
+                        <span className="text-xs text-blue-500 font-bold uppercase">
+                          Khoảng cách
+                        </span>
+                        <p className="text-lg font-black text-blue-600 dark:text-blue-400">
+                          {routeData.distance} km
+                        </p>
+                      </div>
+                      <div className="bg-purple-50 dark:bg-purple-900/30 p-3 rounded-xl text-center">
+                        <span className="text-xs text-purple-500 font-bold uppercase">
+                          Thời gian
+                        </span>
+                        <p className="text-lg font-black text-purple-600 dark:text-purple-400">
+                          {routeData.duration} phút
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  <button className="w-full mt-4 py-3 bg-green-500 hover:bg-green-600 text-white font-bold rounded-xl shadow-lg shadow-green-500/30 flex items-center justify-center gap-2">
+                    📞 Gọi tài xế
+                  </button>
                 </div>
-                <div className="flex justify-between items-center bg-gray-50 dark:bg-gray-700/50 p-3 rounded-xl mb-4">
-                  <span className="font-mono font-bold text-lg text-gray-700 dark:text-gray-200">
-                    {driverInfo.plate}
-                  </span>
-                  <span className="text-sm font-bold text-gray-500">
-                    Honda Vision
-                  </span>
+              ) : (
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col items-center justify-center text-center h-48">
+                  <div className="animate-spin text-4xl mb-2">🔍</div>
+                  <p className="text-gray-500 font-medium">
+                    Đang tìm tài xế gần bạn...
+                  </p>
                 </div>
-                <a
-                  href={`tel:${driverInfo.phone}`}
-                  className="w-full py-3 bg-green-500 text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-green-600 transition"
-                >
-                  📞 Gọi tài xế
-                </a>
-              </div>
-            ) : (
-              <div className="bg-white dark:bg-gray-800 p-6 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col items-center justify-center text-center h-48">
-                <div className="animate-spin text-4xl mb-2">🔍</div>
-                <p className="text-gray-500 font-medium">
-                  Đang tìm tài xế gần bạn...
+              )}
+
+              {/* Delivery Info */}
+              <div className="bg-white dark:bg-gray-800 p-6 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700">
+                <h3 className="font-bold text-gray-800 dark:text-white mb-2">
+                  Giao đến
+                </h3>
+                <p className="text-gray-600 dark:text-gray-400 leading-relaxed">
+                  {order?.address || "Đang tải địa chỉ..."}
                 </p>
               </div>
-            )}
-
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700">
-              <h3 className="font-bold text-gray-800 dark:text-white mb-2">
-                Giao đến
-              </h3>
-              <p className="text-gray-600 dark:text-gray-400 leading-relaxed">
-                {order?.address || "Đang tải địa chỉ..."}
-              </p>
             </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

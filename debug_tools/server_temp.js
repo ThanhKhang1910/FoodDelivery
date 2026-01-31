@@ -1,10 +1,10 @@
 const express = require("express");
 const cors = require("cors");
 const app = express();
-const membershipRoutes = require("./src/routes/membershipRoutes");
+const membershipRoutes = require("../src/routes/membershipRoutes");
 const dotenv = require("dotenv");
 dotenv.config();
-const db = require("./src/config/db");
+const db = require("../src/config/db");
 
 app.use(cors());
 app.use(express.json());

@@ -1,7 +1,8 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useCart } from "../context/CartContext";
 import axiosClient from "../api/axiosClient";
 import { useNavigate } from "react-router-dom";
+import AddressAutocomplete from "../components/AddressAutocomplete";
 
 const Checkout = () => {
   const {
@@ -18,6 +19,7 @@ const Checkout = () => {
 
   // Checkout Form State
   const [address, setAddress] = useState("");
+  const [coordinates, setCoordinates] = useState(null);
   const [note, setNote] = useState("");
   const [discountCode, setDiscountCode] = useState("");
   const [discountApplied, setDiscountApplied] = useState(0);
@@ -33,7 +35,31 @@ const Checkout = () => {
     }
   };
 
-  const finalTotal = totalAmount + 15000 - discountApplied;
+  const [shippingFee, setShippingFee] = useState(15000);
+  const [distance, setDistance] = useState(0);
+
+  // Fetch Shipping Fee when coordinates change
+  useEffect(() => {
+    if (coordinates && restaurantId) {
+      axiosClient
+        .post("/orders/fee", {
+          restaurant_id: restaurantId,
+          latitude: coordinates.lat,
+          longitude: coordinates.lng,
+        })
+        .then((res) => {
+          setShippingFee(res.data.shipping_fee);
+          setDistance(res.data.distance_km);
+        })
+        .catch((err) => console.error("Failed to calculate fee:", err));
+    } else {
+      // Reset to default if no coords
+      setShippingFee(15000);
+      setDistance(0);
+    }
+  }, [coordinates, restaurantId]);
+
+  const finalTotal = totalAmount + shippingFee - discountApplied;
 
   if (cartItems.length === 0) {
     return (
@@ -56,6 +82,8 @@ const Checkout = () => {
         restaurant_id: restaurantId,
         payment_method: paymentMethod,
         address: address, // Send address to backend
+        customer_latitude: coordinates?.lat || null,
+        customer_longitude: coordinates?.lng || null,
         note: note,
         discount: discountApplied,
         items: cartItems.map((item) => ({
@@ -73,7 +101,7 @@ const Checkout = () => {
         return;
       }
 
-      const res = await axiosClient.post("/orders", orderData);
+      const res = await axiosClient.post("/orders/create", orderData);
 
       // Navigate to Tracking Page
       alert(`Đặt hàng thành công! Mã đơn: ${res.data.order_id}`);
@@ -108,12 +136,10 @@ const Checkout = () => {
                 Địa chỉ giao hàng
               </h2>
               <div className="space-y-4">
-                <input
-                  type="text"
-                  placeholder="Nhập địa chỉ nhận hàng..."
+                <AddressAutocomplete
                   value={address}
-                  onChange={(e) => setAddress(e.target.value)}
-                  className="w-full p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl outline-none focus:ring-2 focus:ring-primary focus:bg-white dark:focus:bg-gray-800 transition text-gray-800 dark:text-white font-medium"
+                  onChange={setAddress}
+                  onSelectLocation={setCoordinates}
                 />
                 <input
                   type="text"
@@ -266,8 +292,10 @@ const Checkout = () => {
                   <span>{totalAmount.toLocaleString()}đ</span>
                 </div>
                 <div className="flex justify-between text-gray-600 dark:text-gray-400">
-                  <span>Phí giao hàng</span>
-                  <span>15,000đ</span>
+                  <span>
+                    Phí giao hàng {distance > 0 && `(${distance} km)`}
+                  </span>
+                  <span>{shippingFee.toLocaleString()}đ</span>
                 </div>
                 {discountApplied > 0 && (
                   <div className="flex justify-between text-green-500 font-bold">

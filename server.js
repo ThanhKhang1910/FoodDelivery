@@ -67,13 +67,18 @@ app.get("/", (req, res) => {
 });
 
 // Socket.io Connection
-// Socket.io Connection
 io.on("connection", (socket) => {
   console.log("New client connected:", socket.id);
 
   socket.on("join_order", (orderId) => {
     socket.join(`order_${orderId}`);
     console.log(`Socket ${socket.id} joined room: order_${orderId}`);
+  });
+
+  // Join user-specific room for order history updates
+  socket.on("join_user_room", (userId) => {
+    socket.join(`user_${userId}`);
+    console.log(`Socket ${socket.id} joined user room: user_${userId}`);
   });
 
   socket.on("disconnect", () => {
@@ -89,7 +94,7 @@ io.on("connection", (socket) => {
 });
 
 // Start Server
-const PORT = 5005; // MOVED TO 5005 TO AVOID ZOMBIE PROCESS
+const PORT = 5005; // Reverted to 5005
 const Membership = require("./src/models/membershipModel");
 
 server.listen(PORT, async () => {
@@ -153,6 +158,10 @@ server.listen(PORT, async () => {
   };
 
   dumpRoutes();
+
+  // Run Migrations
+  const migrateBikeFeature = require("./src/utils/migrateBike");
+  await migrateBikeFeature();
 
   await Membership.initTable();
 });

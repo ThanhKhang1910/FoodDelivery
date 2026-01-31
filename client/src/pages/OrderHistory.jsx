@@ -2,15 +2,87 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import axiosClient from "../api/axiosClient";
 import { useTheme } from "../contexts/ThemeContext";
+import { useCart } from "../context/CartContext";
+import { io } from "socket.io-client";
 
 const OrderHistory = () => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
   const { isDark } = useTheme();
+  const { setCart, restaurantId } = useCart();
+
+  const handleReorder = async (e, orderId) => {
+    e.stopPropagation();
+    try {
+      // Fetch full order details including items
+      const res = await axiosClient.get(`/orders/${orderId}`);
+      const order = res.data;
+
+      if (!order.items || order.items.length === 0) {
+        alert("Không thể đặt lại đơn hàng này (không tìm thấy món).");
+        return;
+      }
+
+      // Check restaurant conflict
+      if (restaurantId && parseInt(restaurantId) !== order.restaurant_id) {
+        if (
+          !window.confirm(
+            "Giỏ hàng của bạn đang có món của nhà hàng khác. Bạn có muốn xóa để đặt lại đơn này không?",
+          )
+        ) {
+          return;
+        }
+      }
+
+      // Format items for cart
+      const cartItems = order.items.map((item) => ({
+        food_id: item.food_id,
+        name: item.name,
+        price: parseFloat(item.price),
+        quantity: item.quantity,
+        image_url: item.image_url,
+      }));
+
+      setCart(cartItems, order.restaurant_id.toString());
+      navigate("/checkout");
+    } catch (error) {
+      console.error("Reorder failed:", error);
+      alert("Có lỗi xảy ra khi đặt lại đơn hàng.");
+    }
+  };
 
   useEffect(() => {
     fetchOrderHistory();
+
+    // Socket.IO: Listen for real-time order status updates
+    const socket = io("http://localhost:5005");
+
+    // Get user ID from localStorage (set during login)
+    const userStr = localStorage.getItem("user");
+    if (userStr) {
+      const user = JSON.parse(userStr);
+      const userId = user.id || user.user_id;
+
+      // Join user-specific room
+      socket.emit("join_user_room", userId);
+    }
+
+    socket.on("order_status_update", (data) => {
+      console.log("[Socket] Order status updated:", data);
+      // Update the specific order in the list
+      setOrders((prevOrders) =>
+        prevOrders.map((order) =>
+          order.order_id === data.order_id
+            ? { ...order, status: data.status }
+            : order,
+        ),
+      );
+    });
+
+    return () => {
+      socket.disconnect();
+    };
   }, []);
 
   const fetchOrderHistory = async () => {
@@ -172,6 +244,15 @@ const OrderHistory = () => {
                         ? "Xem chi tiết"
                         : "Theo dõi"}
                     </button>
+                    {(order.status === "COMPLETED" ||
+                      order.status === "CANCELLED") && (
+                      <button
+                        onClick={(e) => handleReorder(e, order.order_id)}
+                        className="mt-2 block w-full px-4 py-2 bg-primary text-white hover:bg-primary-dark rounded-xl font-medium transition text-sm text-center"
+                      >
+                        🔄 Đặt lại
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>

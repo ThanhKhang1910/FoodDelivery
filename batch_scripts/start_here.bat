@@ -1,0 +1,6 @@
+@echo off
+echo Killing old node processes...
+taskkill /F /IM node.exe
+echo Starting Backend Server on port 5006...
+start /B node server.js > server_output_bat.log 2>&1
+echo Server launched in background. Check server_output_bat.log for details.

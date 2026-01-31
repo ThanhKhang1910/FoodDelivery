@@ -14,6 +14,7 @@ import Checkout from "./pages/Checkout";
 import OrderTracking from "./pages/OrderTracking";
 import OrderHistory from "./pages/OrderHistory";
 import Profile from "./pages/Profile";
+import BikeBooking from "./pages/BikeBooking";
 import MembershipModal from "./components/MembershipModal";
 
 import { CartProvider } from "./context/CartContext";
@@ -161,6 +162,7 @@ function App() {
                 <Route path="/profile" element={<Profile />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/register" element={<Register />} />
+                <Route path="/bike-booking" element={<BikeBooking />} />
               </Routes>
             </main>
 
